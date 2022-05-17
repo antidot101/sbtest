@@ -12,9 +12,10 @@
 Для случае работы с большим исходным файлом предусмотрено чтение частями:
 разбиение проводится по указанному количеству строк.
 
-Исключение вставки дубликатов реализовано через уникальное ограничение таблицы
-с условием ON CONFLICT IGNORE: исходная запись не затрагивается, дубликаты
-игнорируются.
+Исключение вставки дубликатов реализовано через ограничение таблицы
+по уникальности с условием ON CONFLICT IGNORE: исходная запись не затрагивается,
+дубликаты игнорируются. Для корректной работы UNIQUE CONSTRAINT значение null
+заменены на 0.
 """
 
 import sys
@@ -38,11 +39,9 @@ sys.tracebacklimit = -1
 warnings.filterwarnings("ignore")
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s.%(msecs)03d %(message)s',
-    datefmt='%d/%m/%Y %I:%M:%S'
-)
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s.%(msecs)03d %(message)s',
+                    datefmt='%d/%m/%Y %I:%M:%S')
 
 
 class DBConnection:
@@ -65,10 +64,10 @@ def db_validator(f):
     def wrapper(*args, **kwargs):
         try:
             f(*args, **kwargs)
-        except sqlite3.IntegrityError:
-            logging.error(f"====== Обнаружены дубликаты. "
-                          f"Запись фрагмента не выполнена")
-        except sqlite3.OperationalError as e:
+        # except sqlite3.IntegrityError:
+        #     logging.error(f"====== Обнаружены дубликаты. "
+        #                   f"Запись фрагмента не выполнена")
+        except sqlite3.DatabaseError as e:
             logging.error(f"====== Ошибка базы данных: {e}")
         else:
             logging.info("====== Работа с фрагментом завершена")
@@ -93,7 +92,7 @@ class DB:
                 df_chunk = df_chunk[df_chunk["year_award"] == year_award]
             if not df_chunk.empty:
 
-                # Значения null заменяем на NaN для корректной работы constraint
+                # Значения null заменяем на 0 для корректной работы constraint
                 df_chunk.fillna(0, inplace=True)
                 print(df_chunk)
                 df_chunk.to_sql(
@@ -134,7 +133,7 @@ class Reader:
 if __name__ == "__main__":
 
     path_to_file = "golden_globe_awards.csv"
-    db_conn = "file:golden_globe_awards.db?moe=rw"
+    db_conn = "file:golden_globe_awards.db?mode=rw"
 
     gga_db = DB(db_conn)
     reader = Reader(path_to_file)
